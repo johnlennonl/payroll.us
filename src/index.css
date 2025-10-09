@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+/* Suaviza el cambio de colores */
+* {
+  transition: background-color .2s linear, color .2s linear, border-color .2s linear;
+}
