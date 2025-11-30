@@ -1,9 +1,11 @@
 import React from "react";
 import { useAuth } from "../providers/AuthProvider.jsx";
-import { Users, FileText, ShieldCheck, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { motion } from "framer-motion";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { Users, FileText, ShieldCheck, TrendingUp, TrendingDown, Minus, ShoppingCart, Eye, Printer, CheckCircle2 } from "lucide-react";
+import Brand from "../components/Brand.jsx";
+import { motion as Motion } from "framer-motion";
+import { collection, getDocs, query, where, orderBy, limit, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { Link, useNavigate } from "react-router-dom";
 
 function pctChange(curr, prev) {
   if (!isFinite(prev) || prev === 0) return curr > 0 ? 100 : 0;
@@ -14,6 +16,8 @@ function fmtPct(n) {
   return s;
 }
 
+// end of helpers
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = React.useState({
@@ -22,67 +26,47 @@ export default function Dashboard() {
     clients30dPrev: 0,
     paystubs30d: 0,
     paystubs30dPrev: 0,
-    policies: 12, // simulado por ahora
+    policies: 0,
+    buyOrdersTotal: 0,
+    buyOrdersPending: 0,
   });
 
   React.useEffect(() => {
-  const fetchStats = async () => {
-    try {
-      const now = new Date();
-      const since = new Date(now);
-      since.setDate(since.getDate() - 30);
-      const prevSince = new Date(since);
-      prevSince.setDate(prevSince.getDate() - 30);
+    async function fetchStats() {
+      try {
+        const clientsSnap = await getDocs(collection(db, 'clients'));
+        const clientsTotal = clientsSnap.size;
 
-      // --- CLIENTES ---
-      const clientsAllSnap = await getDocs(collection(db, "clients"));
-      const clientsTotal = clientsAllSnap.size;
+        const paystubsSnap = await getDocs(collection(db, 'paystubs'));
+        const paystubs30d = paystubsSnap.size;
 
-      const clientsNowQ = query(collection(db, "clients"), where("createdAt", ">", since));
-      const clientsNowSnap = await getDocs(clientsNowQ);
-      const clients30d = clientsNowSnap.size;
+        const policiesSnap = await getDocs(collection(db, 'insurances'));
+        const policies = policiesSnap.size;
 
-      const clientsPrevQ = query(
-        collection(db, "clients"),
-        where("createdAt", ">=", prevSince),
-        where("createdAt", "<", since)
-      );
-      const clientsPrevSnap = await getDocs(clientsPrevQ);
-      const clients30dPrev = clientsPrevSnap.size;
+        const buyOrdersSnap = await getDocs(collection(db, 'buyOrders'));
+        const buyOrdersTotal = buyOrdersSnap.size;
 
-      // --- PAYSTUBS ---
-      const payNowQ = query(collection(db, "paystubs"), where("createdAt", ">", since));
-      const payNowSnap = await getDocs(payNowQ);
-      const paystubs30d = payNowSnap.size;
+        const qPending = query(collection(db, 'buyOrders'), where('status', '==', 'pending'));
+        const pendingSnap = await getDocs(qPending);
+        const buyOrdersPending = pendingSnap.size;
 
-      const payPrevQ = query(
-        collection(db, "paystubs"),
-        where("createdAt", ">=", prevSince),
-        where("createdAt", "<", since)
-      );
-      const payPrevSnap = await getDocs(payPrevQ);
-      const paystubs30dPrev = payPrevSnap.size;
-
-      // --- POLIZAS ACTIVAS ---
-      const activeInsQ = query(collection(db, "insurances"), where("status", "==", "active"));
-      const activeInsSnap = await getDocs(activeInsQ);
-      const policies = activeInsSnap.size;
-
-      setStats({
-        clientsTotal,
-        clients30d,
-        clients30dPrev,
-        paystubs30d,
-        paystubs30dPrev,
-        policies,
-      });
-    } catch (err) {
-      console.error("Error obteniendo estadísticas:", err);
+        setStats({
+          clientsTotal,
+          clients30d: 0,
+          clients30dPrev: 0,
+          paystubs30d,
+          paystubs30dPrev: 0,
+          policies,
+          buyOrdersTotal,
+          buyOrdersPending,
+        });
+      } catch (err) {
+        console.error('Error obteniendo estadísticas:', err);
+      }
     }
-  };
 
-  fetchStats();
-}, []);
+    fetchStats();
+  }, []);
 
   // cálculos de % growth
   const growthClients = pctChange(stats.clients30d, stats.clients30dPrev);
@@ -132,6 +116,13 @@ export default function Dashboard() {
       ),
     },
     {
+      title: "Buy Orders",
+      icon: <ShoppingCart className="w-8 h-8" />,
+      color: "text-info",
+      value: (stats.buyOrdersTotal || 0).toLocaleString(),
+      desc: "Total de buy orders registrados",
+    },
+    {
       title: "Pólizas activas",
       icon: <ShieldCheck className="w-8 h-8" />,
       color: "text-accent",
@@ -141,7 +132,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <motion.div
+    <Motion.div
       className="min-h-screen bg-gradient-to-br from-base-200 to-base-300 p-6"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -159,21 +150,18 @@ export default function Dashboard() {
               Aquí podrás visualizar métricas clave, clientes y movimientos recientes.
             </p>
           </div>
-          <div className="avatar mt-4 md:mt-0">
-            <div className="w-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2 overflow-hidden">
-              <img
-                src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/United-states_flag_icon_round.svg/1024px-United-states_flag_icon_round.svg.png"
-                alt="Avatar"
-              />
+          <div className="hidden sm:block mt-4 md:mt-0">
+            <div className="w-full max-w-xs">
+              <Brand variant="undraw" size="lg" className="rounded-lg" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Estadísticas dinámicas */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-4">
         {cards.map((item, i) => (
-          <motion.div
+          <Motion.div
             key={i}
             className="stat bg-base-100 shadow-md rounded-xl hover:shadow-lg transition"
             initial={{ opacity: 0, y: 20 }}
@@ -184,9 +172,116 @@ export default function Dashboard() {
             <div className="stat-title">{item.title}</div>
             <div className={`stat-value ${item.color}`}>{item.value}</div>
             <div className="stat-desc text-sm">{item.desc}</div>
-          </motion.div>
+          </Motion.div>
         ))}
       </div>
-    </motion.div>
+
+      {/* Últimos Buy Orders */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold">Últimos Buy Orders</h3>
+          <Link to="/buyorders" className="btn btn-sm btn-ghost">Ver todos</Link>
+        </div>
+        <BuyOrdersPreview />
+      </div>
+    </Motion.div>
+  );
+}
+
+function BuyOrdersPreview() {
+  const [orders, setOrders] = React.useState([]);
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const q = query(collection(db, "buyOrders"), orderBy("createdAt", "desc"), limit(5));
+    const unsub = onSnapshot(q, (snap) => {
+      setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error("Error snapshot buy orders:", err));
+    return () => unsub();
+  }, []);
+
+  if (!orders.length) return (
+    <div className="card p-4 bg-base-100">No hay buy orders recientes.</div>
+  );
+  return (
+    <>
+      {/* Mobile card list */}
+      <div className="md:hidden space-y-3">
+        {orders.map(o => (
+          <div key={o.id} className="card p-3 bg-base-100 rounded shadow-sm" onClick={() => navigate(`/buyorders?id=${o.id}`)}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="font-medium text-sm truncate">{o.buyerName || o.buyerEmail || '—'}</div>
+                <div className="text-xs opacity-70 truncate">
+                  {(() => {
+                    const year = o.year || o.vehicle?.year;
+                    const make = o.make || o.vehicle?.make;
+                    const model = o.model || o.vehicle?.model;
+                    const vin = o.vin || o.vehicle?.vin;
+                    const parts = [year, make, model].filter(Boolean);
+                    if (parts.length) return parts.join(' ');
+                    if (vin) return vin;
+                    return '—';
+                  })()}
+                </div>
+                <div className="text-xs opacity-70 mt-1">{o.city || '—'}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm">{Number(o.totalWithFees || o.subtotal || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</div>
+                <div className="text-xs opacity-70">{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleDateString() : '—'}</div>
+                <div className="flex items-center justify-end gap-2 mt-2">
+                  <button className="btn btn-ghost btn-xs" onClick={(e) => { e.stopPropagation(); const win = window.open('', '_blank', 'width=800,height=900'); if (!win) return; win.document.write('<html><body><h3>Buy Order</h3><pre>'+JSON.stringify(o,null,2)+'</pre></body></html>'); win.document.close(); setTimeout(()=>win.print(),300); }} title="Imprimir"><Printer className="w-4 h-4" /></button>
+                  <button className="btn btn-ghost btn-xs" onClick={async (e) => { e.stopPropagation(); if (!confirm('Marcar como registrado?')) return; await updateDoc(doc(db, 'buyOrders', o.id), { status: 'registered', updatedAt: serverTimestamp() }); }} title="Marcar registrado"><CheckCircle2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block overflow-x-auto bg-base-100 rounded-xl">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Vehículo</th>
+              <th className="text-right">Precio</th>
+              <th className="text-right">Total</th>
+              <th className="text-right">Fecha</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(o => (
+              <tr key={o.id} className="hover:bg-base-200 hover:shadow-sm transition cursor-pointer" onClick={() => navigate(`/buyorders?id=${o.id}`)}>
+                <td>{o.buyerName || o.buyerEmail || '—'}</td>
+                <td>
+                  {(() => {
+                    const year = o.year || o.vehicle?.year;
+                    const make = o.make || o.vehicle?.make;
+                    const model = o.model || o.vehicle?.model;
+                    const vin = o.vin || o.vehicle?.vin;
+                    const parts = [year, make, model].filter(Boolean);
+                    if (parts.length) return parts.join(' ');
+                    if (vin) return vin;
+                    return '—';
+                  })()}
+                </td>
+                <td className="text-right">{Number(o.price).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td>
+                <td className="text-right">{Number(o.totalWithFees || o.subtotal || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td>
+                <td className="text-right">{o.createdAt?.toDate ? o.createdAt.toDate().toLocaleDateString() : '—'}</td>
+                <td className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <button className="btn btn-ghost btn-xs" onClick={(e) => { e.stopPropagation(); const win = window.open('', '_blank', 'width=800,height=900'); if (!win) return; win.document.write('<html><body><h3>Buy Order</h3><pre>'+JSON.stringify(o,null,2)+'</pre></body></html>'); win.document.close(); setTimeout(()=>win.print(),300); }} title="Imprimir"><Printer className="w-4 h-4" /></button>
+                    <button className="btn btn-ghost btn-xs" onClick={async (e) => { e.stopPropagation(); if (!confirm('Marcar como registrado?')) return; await updateDoc(doc(db, 'buyOrders', o.id), { status: 'registered', updatedAt: serverTimestamp() }); }} title="Marcar registrado"><CheckCircle2 className="w-4 h-4" /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

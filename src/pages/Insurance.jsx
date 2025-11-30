@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { db } from "../lib/firebase";
 import {
   collection, addDoc, updateDoc, deleteDoc, doc,
-  serverTimestamp, onSnapshot, query, where, orderBy
+  serverTimestamp, onSnapshot, query, orderBy
 } from "firebase/firestore";
 import { Shield, Plus, Pencil, Trash2, CheckCircle2 } from "lucide-react";
 
@@ -56,49 +56,86 @@ export default function Insurance() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Shield className="w-6 h-6 text-accent" />
           <h1 className="text-xl font-semibold">Insurance</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full md:w-auto">
           <input
-            className="input input-sm input-bordered w-64"
+            className="input input-sm input-bordered w-full md:w-64"
             placeholder="Buscar (titular, carrier, # póliza, estado)"
             value={search}
             onChange={(e)=>setSearch(e.target.value)}
           />
-          <button className="btn btn-sm btn-accent gap-2" onClick={onAdd}>
+          <button className="btn btn-sm btn-accent gap-2 whitespace-nowrap" onClick={onAdd}>
             <Plus className="w-4 h-4" /> Nueva póliza
           </button>
         </div>
       </div>
 
-      {/* Tabla */}
-      <div className="overflow-x-auto bg-base-100 rounded-xl">
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {filtered.map((r) => (
+          <div key={r.id} className="card bg-base-100 p-3 rounded shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="font-medium truncate">{r.holderName} {r.status === 'active' ? <span title="Registrado" className="inline-block w-2 h-2 rounded-full bg-green-500 ml-2" /> : null}</div>
+                <div className="text-xs opacity-70">{r.carrier} · #{r.policyNumber}</div>
+                <div className="text-xs opacity-60 mt-1">{r.year} {r.make} {r.model} · VIN {r.vin}</div>
+                <div className="text-xs opacity-60 mt-1 truncate">{r.address}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm"><span className="font-semibold">{r.status}</span></div>
+                <div className="text-xs opacity-70">{r.startDate} → {r.endDate}</div>
+                <div className="text-sm mt-1">${Number(r.premium || 0).toFixed(2)}</div>
+                <div className="flex items-center justify-end gap-2 mt-2">
+                  {r.status !== "active" ? (
+                    <button className="btn btn-xs btn-outline" onClick={()=>updateDoc(doc(db, "insurances", r.id), { status: "active", updatedAt: serverTimestamp() })} title="Marcar activa"><CheckCircle2 className="w-4 h-4" /></button>
+                  ) : null}
+                  <button className="btn btn-xs" onClick={()=>onEdit(r)}><Pencil className="w-4 h-4" /></button>
+                  <button className="btn btn-xs btn-outline" onClick={()=>onArchive(r)}>Archivar</button>
+                  <button className="btn btn-xs btn-outline btn-error" onClick={()=>onDelete(r)}><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {filtered.length === 0 && (
+          <div className="card p-6 text-center opacity-60">Sin resultados.</div>
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block overflow-x-auto bg-base-100 rounded-xl">
         <table className="table">
           <thead>
             <tr>
-              <th>Titular</th>
-              <th>Carrier</th>
-              <th># Póliza</th>
-              <th>Estado (US)</th>
-              <th>Vigencia</th>
-              <th>Status</th>
-              <th>Prima</th>
+                <th>Titular</th>
+                  <th>Carrier</th>
+                  <th># Póliza</th>
+                  <th>VIN</th>
+                  <th>Auto</th>
+                  <th>Dirección</th>
+                  <th>Estado (US)</th>
+                  <th>Vigencia</th>
+                  <th>Status</th>
+                  <th>Prima</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((r) => (
               <tr key={r.id} className="hover">
-                <td className="font-medium">{r.holderName}</td>
+                <td className="font-medium">{r.holderName} {r.status === 'active' ? <span title="Registrado" className="inline-block w-2 h-2 rounded-full bg-green-500 ml-2" /> : null}</td>
                 <td>{r.carrier}</td>
                 <td>{r.policyNumber}</td>
+                <td>{r.vin}</td>
+                <td>{r.year} / {r.make} / {r.model}</td>
+                <td style={{maxWidth:220}}>{r.address}</td>
                 <td>{r.state}</td>
-                <td>
-                  {r.startDate} → {r.endDate}
-                </td>
+                <td>{r.startDate} → {r.endDate}</td>
                 <td>
                   <span className={`badge ${
                     r.status === "active" ? "badge-success" :
@@ -155,10 +192,15 @@ export default function Insurance() {
 function PolicyModal({ initial, onClose }) {
   const isEdit = !!initial;
   const { register, handleSubmit, formState:{ errors, isSubmitting }, reset } = useForm({
-    defaultValues: {
+          defaultValues: {
       holderName:  initial?.holderName  ?? "",
       carrier:     initial?.carrier     ?? "",
-      policyNumber:initial?.policyNumber?? "",
+      policyNumber: initial?.policyNumber?? "",
+      vin:          initial?.vin         ?? "",
+      year:         initial?.year        ?? "",
+      make:         initial?.make        ?? "",
+      model:        initial?.model       ?? "",
+      address:      initial?.address     ?? "",
       state:       initial?.state       ?? "",
       startDate:   initial?.startDate   ?? "",
       endDate:     initial?.endDate     ?? "",
@@ -172,6 +214,11 @@ function PolicyModal({ initial, onClose }) {
       holderName: v.holderName.trim(),
       carrier: v.carrier.trim(),
       policyNumber: v.policyNumber.trim(),
+      vin: v.vin?.trim() || "",
+      year: v.year || "",
+      make: v.make?.trim() || "",
+      model: v.model?.trim() || "",
+      address: v.address?.trim() || "",
       state: v.state.trim().toUpperCase(),
       startDate: v.startDate,
       endDate: v.endDate,

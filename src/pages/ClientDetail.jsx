@@ -8,12 +8,18 @@ import {
   addDoc, serverTimestamp, orderBy, updateDoc, deleteDoc
 } from "firebase/firestore";
 import {
-  FileText, Plus, Settings2, Trash2, Sigma, Info, X
+  FileText, Plus, Settings2, Trash2, Sigma, Info, X, ArrowLeft
 } from "lucide-react";
+
+// Helper: initials for avatar
+const initials = (name) => {
+  if (!name) return "—";
+  return name.split(/\s+/).map(s => s[0]).filter(Boolean).slice(0,2).join('').toUpperCase();
+}
 
 /* =============== helpers UI =============== */
 
-function getYtdBaseGross(client, year) {
+function _getYtdBaseGross(client, year) {
   const yb = client?.ytdBase;
   if (!yb || Number(yb.year) !== year) return 0;
   // Si existen campos separados, úsales; si no, cae al "gross" clásico
@@ -159,81 +165,105 @@ const currentYearYTD = useMemo(() => {
 
   return (
     <div className="space-y-5">
-      {/* migas */}
-      <div className="breadcrumbs text-sm">
-        <ul>
-          <li><Link to="/clients">Clientes</Link></li>
-          <li>{client.fullName}</li>
-        </ul>
+      <div className="flex items-center gap-3">
+        <button type="button" className="btn btn-ghost btn-square btn-sm" onClick={() => window.history.back()} title="Volver">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        {/* migas */}
+        <div className="breadcrumbs text-sm">
+          <ul>
+            <li><Link to="/clients">Clientes</Link></li>
+            <li>{client.fullName}</li>
+          </ul>
+        </div>
       </div>
 
-      {/* Ficha */}
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body grid md:grid-cols-2 gap-2">
-          <div>
-            <h2 className="card-title">{client.fullName}</h2>
-            <p>{client.address}</p>
-            <p>Estado: <b>{client.state}</b> — ZIP: <b>{client.zip}</b></p>
+      {/* Ficha - header potente */}
+      <div className="w-full bg-base-100 rounded-2xl shadow-2xl p-6 ring-1 ring-black/10">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex items-start gap-5 min-w-0 w-full">
+            <div className="bg-base-200 p-4 rounded-xl shadow-2xl w-full flex items-center gap-4">
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-primary to-secondary text-base-100 font-extrabold shadow-2xl flex-shrink-0 text-xl ring-1 ring-black/20">{initials(client.fullName)}</div>
+              <div className="min-w-0">
+                <h2 className="text-3xl md:text-4xl font-extrabold leading-tight truncate">{client.fullName}</h2>
+                <p className="mt-2 text-sm opacity-80 truncate max-w-[70ch]">{client.address}</p>
+                <p className="mt-2 text-sm opacity-70">Estado: <b className="font-semibold">{client.state}</b> — ZIP: <b className="font-semibold">{client.zip}</b></p>
+              </div>
+            </div>
           </div>
-          <div className="md:text-right">
-            <p>SSN: •••• {client.ssnLast4}</p>
-            <p>Cuenta: •••• {client.accountLast4}</p>
+
+          <div className="flex-shrink-0 hidden md:flex items-center gap-3">
+            <button type="button" className="btn btn-sm w-full sm:w-auto gap-2" onClick={() => setOpenYTD(true)}>
+              <Settings2 className="w-4 h-4" /> Ajustar YTD
+            </button>
+            <button type="button" className="btn btn-sm btn-accent w-full sm:w-auto gap-2" onClick={() => setOpenBulk(true)}>
+              <Sigma className="w-4 h-4" /> Crear 4 paystubs
+            </button>
+            <button type="button" className="btn btn-sm btn-secondary w-full sm:w-auto gap-2" onClick={() => setOpenNew(true)} aria-label="Nuevo paystub">
+              <Plus className="w-4 h-4" /> <span className="hidden md:inline">Nuevo paystub</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Header Paystubs */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-secondary" />
           <h3 className="text-lg font-semibold">Paystubs</h3>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="btn btn-sm gap-2" onClick={() => setOpenYTD(true)}>
-            <Settings2 className="w-4 h-4" /> Ajustar YTD
-          </button>
-          <button className="btn btn-sm btn-accent gap-2" onClick={() => setOpenBulk(true)}>
-            <Sigma className="w-4 h-4" /> Crear 4 paystubs
-          </button>
-          <button className="btn btn-sm btn-secondary gap-2" onClick={() => setOpenNew(true)}>
-            <Plus className="w-4 h-4" /> Nuevo paystub
-          </button>
+
+        <div className="w-full md:w-auto relative z-20">
+          {/* Mobile: icon-only row centered */}
+          <div className="flex items-center justify-center gap-3 md:hidden mb-2">
+            <button type="button" className="btn btn-ghost btn-circle" onClick={() => setOpenYTD(true)} aria-label="Ajustar YTD">
+              <Settings2 className="w-5 h-5" />
+            </button>
+            <button type="button" className="btn btn-ghost btn-circle btn-accent" onClick={() => setOpenBulk(true)} aria-label="Crear 4 paystubs">
+              <Sigma className="w-5 h-5" />
+            </button>
+            <button type="button" className="btn btn-ghost btn-circle btn-secondary" onClick={() => setOpenNew(true)} aria-label="Nuevo paystub">
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Desktop buttons ahora están dentro del header principal (ver arriba) */}
         </div>
       </div>
 
       {/* YTD actual (resumen desde BRUTO) */}
       {currentYearYTD && (
-  <div className="stats shadow bg-base-100">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
     {/* Total */}
-    <div className="stat">
+    <div className="stat bg-base-100 shadow p-4 rounded-lg">
       <div className="stat-title">YTD Bruto (Total)</div>
       <div className="stat-value text-primary">{money(currentYearYTD.gross)}</div>
       <div className="stat-desc">Bruto acumulado total</div>
     </div>
 
     {/* Impuestos */}
-    <div className="stat">
+    <div className="stat bg-base-100 shadow p-4 rounded-lg">
       <div className="stat-title">YTD Impuestos</div>
       <div className="stat-value text-secondary">{money(currentYearYTD.taxes)}</div>
       <div className="stat-desc">Deducciones totales</div>
     </div>
 
     {/* Neto */}
-    <div className="stat">
+    <div className="stat bg-base-100 shadow p-4 rounded-lg">
       <div className="stat-title">YTD Neto</div>
       <div className="stat-value text-success">{money(currentYearYTD.net)}</div>
       <div className="stat-desc">Ganancia después de impuestos</div>
     </div>
 
     {/* Regular */}
-    <div className="stat">
+    <div className="stat bg-base-100 shadow p-4 rounded-lg">
       <div className="stat-title">YTD Regular</div>
       <div className="stat-value text-info">{money(currentYearYTD.reg)}</div>
       <div className="stat-desc">Pagos regulares sin OT</div>
     </div>
 
     {/* OT */}
-    <div className="stat">
+    <div className="stat bg-base-100 shadow p-4 rounded-lg">
       <div className="stat-title">YTD OT</div>
       <div className="stat-value text-warning">{money(currentYearYTD.ot)}</div>
       <div className="stat-desc">Horas extra acumuladas</div>
@@ -242,8 +272,33 @@ const currentYearYTD = useMemo(() => {
 )}
 
 
-      {/* Tabla paystubs */}
-      <div className="overflow-x-auto bg-base-100 rounded-xl">
+      {/* Tabla paystubs (desktop) and cards (mobile) */}
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {paystubs.length === 0 && (
+          <div className="card p-6 text-center opacity-60">Sin paystubs.</div>
+        )}
+        {paystubs.map(ps => (
+          <div key={ps.id} className="card bg-base-100 p-3 rounded-lg shadow-sm border border-base-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium truncate">{ps.periodStart} → {ps.periodEnd}</div>
+                  <div className="text-sm font-semibold">{money(ps.net)}</div>
+                </div>
+                <div className="text-xs opacity-70 mt-2 truncate">Horas: {ps.hours} · Rate: {ps.rate}</div>
+                <div className="text-xs opacity-60 mt-1">Bruto: {money(ps.gross)} · Impuestos: {money(ps.taxes)}</div>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <button className="btn btn-ghost btn-xs" onClick={() => setDrawer(ps)} title="Detalle">Ver</button>
+                <button className="btn btn-ghost btn-xs btn-error" onClick={async () => { if(!confirm('¿Eliminar este paystub?')) return; await deleteDoc(doc(db,'paystubs',ps.id)); }}>Borrar</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto bg-base-100 rounded-xl">
         <table className="table">
           <thead>
             <tr>
@@ -348,10 +403,20 @@ function PaystubModal({ client, onClose }) {
 
   return (
     <dialog className="modal modal-open z-50">
-      <div className="modal-box max-w-2xl">
-        <h3 className="font-bold text-lg mb-4">Nuevo paystub — {client.fullName}</h3>
+      <div className="modal-box max-w-3xl p-6 rounded-2xl">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary text-base-100 flex items-center justify-center text-lg shadow-2xl ring-1 ring-black/20">
+              <FileText className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-2xl">Nuevo paystub</h3>
+            <div className="text-sm opacity-70">{client.fullName}</div>
+          </div>
+        </div>
 
-        <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-4 mt-4" onSubmit={handleSubmit(onSubmit)}>
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="label label-text">Inicio (YYYY-MM-DD)</label>
@@ -396,9 +461,9 @@ function PaystubModal({ client, onClose }) {
             </div>
           </div>
 
-          <div className="modal-action">
-            <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-secondary" disabled={isSubmitting}>Crear</button>
+          <div className="modal-action mt-4 flex flex-col md:flex-row gap-3 justify-end">
+            <button type="button" className="btn w-full md:w-auto btn-ghost" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-secondary w-full md:w-auto" disabled={isSubmitting}>Crear</button>
           </div>
         </form>
       </div>
@@ -412,7 +477,7 @@ function PaystubModal({ client, onClose }) {
 /** Ajustar YTD base (año + bruto acumulado => calcula impuestos y neto con desglose) */
 /** Ajustar YTD base (Regular + OT => Total) */
 function AdjustYTDModal({ client, onClose }) {
-  const { register, handleSubmit, formState: { isSubmitting }, reset, watch, setValue } = useForm({
+  const { register, handleSubmit, formState: { isSubmitting }, reset, watch } = useForm({
     defaultValues: {
       year:          client?.ytdBase?.year  ?? new Date().getFullYear(),
       regularGross:  client?.ytdBase?.regularGross ?? (client?.ytdBase?.gross ?? 0),
@@ -470,9 +535,20 @@ function AdjustYTDModal({ client, onClose }) {
 
   return (
     <dialog className="modal modal-open z-50">
-      <div className="modal-box max-w-xl">
-        <h3 className="font-bold text-lg mb-2">Ajustar YTD — {client.fullName}</h3>
-        <p className="text-sm opacity-70 mb-4">
+      <div className="modal-box max-w-3xl p-6 rounded-2xl">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary text-base-100 flex items-center justify-center text-lg shadow-2xl ring-1 ring-black/20">
+              <Settings2 className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-2xl">Ajustar YTD</h3>
+            <div className="text-sm opacity-70">{client.fullName}</div>
+          </div>
+        </div>
+
+        <p className="text-sm opacity-70 mt-3 mb-2">
           Divide el YTD bruto entre <b>Regular</b> y <b>Overtime</b>. El sistema calcula impuestos del <b>Total</b>.
         </p>
 
@@ -550,9 +626,9 @@ function AdjustYTDModal({ client, onClose }) {
             </div>
           </div>
 
-          <div className="modal-action">
-            <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" disabled={isSubmitting}>Guardar</button>
+          <div className="modal-action mt-4 flex flex-col md:flex-row gap-3 justify-end">
+            <button type="button" className="btn btn-ghost w-full md:w-auto" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary w-full md:w-auto" disabled={isSubmitting}>Guardar</button>
           </div>
         </form>
       </div>
@@ -610,10 +686,20 @@ function Bulk4Modal({ client, onClose }) {
 
   return (
     <dialog className="modal modal-open z-50">
-      <div className="modal-box max-w-2xl">
-        <h3 className="font-bold text-lg mb-4">Crear 4 paystubs — {client.fullName}</h3>
+      <div className="modal-box max-w-3xl p-6 rounded-2xl">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary text-base-100 flex items-center justify-center text-lg shadow-2xl ring-1 ring-black/20">
+              <Sigma className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-2xl">Crear 4 paystubs</h3>
+            <div className="text-sm opacity-70">{client.fullName}</div>
+          </div>
+        </div>
 
-        <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-4 mt-4" onSubmit={handleSubmit(onSubmit)}>
           <div className="grid md:grid-cols-3 gap-3">
             <div>
               <label className="label label-text">Primer inicio (YYYY-MM-DD)</label>
@@ -657,9 +743,9 @@ function Bulk4Modal({ client, onClose }) {
             </div>
           </div>
 
-          <div className="modal-action">
-            <button type="button" className="btn" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-accent" disabled={isSubmitting}>Crear 4</button>
+          <div className="modal-action mt-4 flex flex-col md:flex-row gap-3 justify-end">
+            <button type="button" className="btn btn-ghost w-full md:w-auto" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-accent w-full md:w-auto" disabled={isSubmitting}>Crear 4</button>
           </div>
         </form>
       </div>
