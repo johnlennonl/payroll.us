@@ -190,15 +190,7 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
       let subtotalFilled = false; // marca si ya colocamos el TOTAL que corresponde al Selling Price
       for (const field of fields) {
         try {
-          // Algunos bundlers/minificadores pueden alterar los nombres de constructor
-          // Por eso detectamos si el campo es 'texto' comprobando la presencia de setText
           const rawName = (typeof field.getName === 'function') ? field.getName() : '(sin nombre)';
-          const isTextLike = typeof field.setText === 'function';
-          if (!isTextLike) {
-            const approxType = field && field.constructor && field.constructor.name ? field.constructor.name : 'unknown';
-            console.log(`⏭️ Saltando campo "${rawName}" (no es tipo texto, approx: ${approxType})`);
-            continue;
-          }
           const fieldName = rawName;
 
           // Resolver valor a partir del mapeo base
@@ -215,13 +207,10 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
           const fname = String(fieldName || '').trim();
           const lname = fname.toLowerCase();
 
-          // Prioridad explícita por nombre de campo (evita heurísticas frágiles)
-          // 1) Trade / Allow
+          // Reglas heurísticas (trade, prices, totals, payments)
           if (!value && /\b(allow|trade|used vehicle allowance|usedvehicleallowance|allowance)\b/i.test(lname)) {
             value = tradeAllowanceValue;
           }
-
-          // 2) Selling Price / Price / SalesPrice / SubTotal (subtotal visual)
           if (!value && /^(price|salesprice|sellingprice)$/i.test(fname)) {
             value = sellingPriceFormatted;
           }
@@ -229,83 +218,110 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
             value = sellingPriceFormatted;
             subtotalFilled = true;
           }
-
-          // 3) Taxes y porcentajes ya manejados por fieldMappings (StTax, CityTax, etc.)
-
-          // 4) TOTALS: los alias normalizados manejan Total/Fees/Other
-          // (Se evita sobrescribir aquí para respetar las asignaciones explícitas)
-
-          // Total con taxes (el total mostrado debajo de Plus Pay Off) -> buscar nombres típicos
           if (!value && /\b(total|balanceowed|pluspayoff|totalwithtaxes|totalamount)\b/i.test(lname) && !/other/i.test(lname)) {
-            // Si SubTotal fue llenado, éste es el siguiente TOTAL (total con taxes)
             if (!subtotalFilled) {
-              // Si aún no se llenó SubTotal, asumir Selling Price aquí
               value = sellingPriceFormatted;
               subtotalFilled = true;
             } else {
               value = totalWithTaxesFormatted;
             }
           }
-
-          // 5) FilingFee ya mapeado, pero asegurar Amounts de pagos
           if (!value && /^cashdn$/i.test(fname)) {
             value = totalCashDown ? formatCurrency(totalCashDown) : '';
           }
           if (!value && /^amtfin$/i.test(fname)) {
             value = amountToFinance ? formatCurrency(amountToFinance) : '';
           }
-
-          // 6) Finalmente, si fieldMappings tenía un valor lo respetamos
           if ((value === undefined || value === null) && fieldMappings[fieldName] !== undefined) {
             value = fieldMappings[fieldName];
           }
 
-          // Si estamos en modo debug, en lugar del valor real ponemos el nombre del campo
+          // Si debug está activo, sólo marcar el nombre del campo
           if (debug) {
-            const debugLabel = String(fieldName);
             try {
-              field.setText(debugLabel);
-              if (field.setFontSize) field.setFontSize(8);
-              console.log(`🐞 [debug] "${fieldName}" marcado en la celda`);
-              filledCount++;
-              continue;
+              // Intentar obtener un campo tipado primero
+              let typed = null;
+              try { typed = form.getTextField(fieldName); } catch {}
+              if (!typed) {
+                try { typed = form.getDropdown(fieldName); } catch {}
+              }
+              if (!typed && typeof field.setText === 'function') typed = field;
+              if (typed && typeof typed.setText === 'function') {
+                typed.setText(String(fieldName));
+                if (typed.setFontSize) typed.setFontSize(8);
+                console.log(`🐞 [debug] "${fieldName}" marcado en la celda`);
+                filledCount++;
+                continue;
+              }
             } catch (e) {
               console.warn(`No se pudo escribir debug label en "${fieldName}":`, e.message);
             }
           }
 
-          if (value !== undefined && value !== null && String(value).trim() !== '') {
-            field.setText(String(value));
-            // Forzar fuente embebida para consistencia si está disponible
-            try {
-              if (typeof helv !== 'undefined' && field.setFont) field.setFont(helv);
-            } catch {
-              // no crítico
+          // Intentar obtener el campo tipado desde el form (más fiable que usar el objeto bruto)
+          let typedField = null;
+          try { typedField = form.getTextField(fieldName); } catch {}
+          try { if (!typedField) typedField = form.getCheckBox(fieldName); } catch {}
+          try { if (!typedField) typedField = form.getRadioGroup(fieldName); } catch {}
+          try { if (!typedField) typedField = form.getDropdown(fieldName); } catch {}
+          // Fallback: si el objeto original tiene setText, usarlo
+          if (!typedField && typeof field.setText === 'function') typedField = field;
+
+          if (!typedField) {
+            const approxType = field && field.constructor && field.constructor.name ? field.constructor.name : 'unknown';
+            console.log(`⏭️ Saltando campo "${rawName}" (no es tipo manejable, approx: ${approxType})`);
+            continue;
+          }
+
+          // Si no hay valor asignable, logear y continuar
+          if (value === undefined || value === null || String(value).trim() === '') {
+            console.log(`⚠️ "${fieldName}" - sin valor`);
+            continue;
+          }
+
+          // Escribir el valor según tipo de field
+          if (typeof typedField.setText === 'function') {
+            typedField.setText(String(value));
+            try { if (typeof helv !== 'undefined' && typedField.setFont) typedField.setFont(helv); } catch {}
+            if (typedField.setFontSize) {
+              if (/^DlrName$/i.test(fieldName)) typedField.setFontSize(14);
+              else if (/vin/i.test(fieldName)) typedField.setFontSize(11.5);
+              else typedField.setFontSize(12);
             }
-            // Usar tamaño más grande para el nombre del dealer (titulo)
-            if (field.setFontSize) {
-              if (/^DlrName$/i.test(fieldName)) field.setFontSize(14);
-              // Reducir 0.5pt para VIN para que se muestre completo
-              else if (/vin/i.test(fieldName)) field.setFontSize(11.5);
-              else field.setFontSize(12);
-            }
-            // Intentar alinear a la derecha para campos numéricos clave
             try {
-              if (field.setAlignment) {
+              if (typedField.setAlignment) {
                 if (/\b(Price|Allow|CityTax|StTax|SalesPrice|CashDn|AmtFin|FilingFee|Fees|TotalFees)\b/i.test(fieldName)) {
-                  field.setAlignment('right');
+                  typedField.setAlignment('right');
                 }
               }
-            } catch {
-              // algunos viewers no soportan setAlignment; ignorar
-            }
+            } catch {}
             filledCount++;
             console.log(`✅ "${fieldName}" = "${value}"`);
+          } else if (typeof typedField.check === 'function' || typeof typedField.isChecked === 'function') {
+            // Checkbox-like
+            try {
+              const truthy = (String(value).toLowerCase() === 'true' || Number(value) > 0);
+              if (truthy && typeof typedField.check === 'function') typedField.check();
+              else if (!truthy && typeof typedField.uncheck === 'function') typedField.uncheck();
+              filledCount++;
+              console.log(`✅ Checkbox "${fieldName}" = ${truthy}`);
+            } catch (e) {
+              console.warn(`No se pudo setear checkbox "${fieldName}":`, e.message);
+            }
+          } else if (typeof typedField.select === 'function') {
+            // Dropdown / OptionList
+            try {
+              typedField.select(String(value));
+              filledCount++;
+              console.log(`✅ Dropdown "${fieldName}" = "${value}"`);
+            } catch (e) {
+              console.warn(`No se pudo seleccionar opción en "${fieldName}":`, e.message);
+            }
           } else {
-            console.log(`⚠️ "${fieldName}" - sin valor`);
+            console.log(`⚠️ "${fieldName}" - tipo de campo no soportado para escritura`);
           }
         } catch (err) {
-          console.error(`❌ Error en campo "${field.getName()}":`, err.message);
+          console.error(`❌ Error en campo "${(field && field.getName) ? field.getName() : '(sin nombre)'}":`, err.message);
         }
       }
 
