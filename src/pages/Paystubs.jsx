@@ -116,7 +116,7 @@ export default function Paystubs() {
                 <div className="text-xs opacity-60">State: {money(ps.stateTax)}</div>
                   <div className="flex items-center justify-end gap-2 mt-3">
                   <button onClick={(e)=>{ e.stopPropagation(); navigate(`/clients/${ps.clientId}`); }} className="btn btn-ghost btn-xs" title="Ir a ficha del cliente"><Plus className="w-4 h-4" /></button>
-                  <button className="btn btn-ghost btn-xs btn-error" onClick={async (e) => { e.stopPropagation(); if (!confirm('Eliminar este paystub?')) return; await deleteDoc(doc(db, 'paystubs', ps.id)); }}><Trash2 className="w-4 h-4" /></button>
+                  <button className="btn btn-ghost btn-xs btn-error" onClick={async (e) => { e.stopPropagation(); const ok = await confirmAction({ title: 'Eliminar paystub', text: 'Eliminar este paystub?', confirmText: 'Eliminar', cancelText: 'Cancelar', icon: 'warning' }); if (!ok) return; await deleteDoc(doc(db, 'paystubs', ps.id)); }}><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             </div>
@@ -162,7 +162,7 @@ export default function Paystubs() {
                 <div className="text-xs opacity-60">State: {money(ps.stateTax)}</div>
                 <div className="flex items-center justify-end gap-2 mt-3">
                   <button onClick={(e)=>{ e.stopPropagation(); navigate(`/clients/${ps.clientId}`); }} className="btn btn-ghost btn-xs" title="Ver cliente y paystubs"><Plus className="w-4 h-4" /></button>
-                  <button className="btn btn-ghost btn-xs btn-error" onClick={async (e) => { e.stopPropagation(); if (!confirm('Eliminar este paystub?')) return; await deleteDoc(doc(db, 'paystubs', ps.id)); }}><Trash2 className="w-4 h-4" /></button>
+                  <button className="btn btn-ghost btn-xs btn-error" onClick={async (e) => { e.stopPropagation(); const ok = await confirmAction({ title: 'Eliminar paystub', text: 'Eliminar este paystub?', confirmText: 'Eliminar', cancelText: 'Cancelar', icon: 'warning' }); if (!ok) return; await deleteDoc(doc(db, 'paystubs', ps.id)); }}><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
             </div>

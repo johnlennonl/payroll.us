@@ -19,7 +19,7 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
     const form = pdfDoc.getForm();
     // Embedir fuentes estándar para controlar apariencia (uniformidad)
     const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const helvBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const _helvBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     try {
       form.updateFieldAppearances(helv);
     } catch (e) {
@@ -277,7 +277,7 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
             // Forzar fuente embebida para consistencia si está disponible
             try {
               if (typeof helv !== 'undefined' && field.setFont) field.setFont(helv);
-            } catch (e) {
+            } catch {
               // no crítico
             }
             // Usar tamaño más grande para el nombre del dealer (titulo)
@@ -294,7 +294,7 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
                   field.setAlignment('right');
                 }
               }
-            } catch (e) {
+            } catch {
               // algunos viewers no soportan setAlignment; ignorar
             }
             filledCount++;

@@ -7,6 +7,7 @@ import {
   doc, getDoc, collection, query, where, onSnapshot,
   addDoc, serverTimestamp, orderBy, updateDoc, deleteDoc
 } from "firebase/firestore";
+import { useUnsavedContext } from '../providers/UnsavedChangesProvider.jsx';
 import {
   FileText, Plus, Settings2, Trash2, Sigma, Info, X, ArrowLeft
 } from "lucide-react";
@@ -291,7 +292,7 @@ const currentYearYTD = useMemo(() => {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <button className="btn btn-ghost btn-xs" onClick={() => setDrawer(ps)} title="Detalle">Ver</button>
-                <button className="btn btn-ghost btn-xs btn-error" onClick={async () => { if(!confirm('¿Eliminar este paystub?')) return; await deleteDoc(doc(db,'paystubs',ps.id)); }}>Borrar</button>
+                <button className="btn btn-ghost btn-xs btn-error" onClick={async () => { const ok = await confirmAction({ title: 'Eliminar paystub', text: '¿Eliminar este paystub?', confirmText: 'Eliminar', cancelText: 'Cancelar', icon: 'warning' }); if (!ok) return; await deleteDoc(doc(db,'paystubs',ps.id)); }}>Borrar</button>
               </div>
             </div>
           </div>
@@ -337,7 +338,10 @@ const currentYearYTD = useMemo(() => {
                   <button
                     className="btn btn-ghost btn-xs text-error gap-1"
                     onClick={async () => {
-                      if (!confirm("¿Eliminar este paystub?")) return;
+                      {
+                        const ok = await confirmAction({ title: 'Eliminar paystub', text: '¿Eliminar este paystub?', confirmText: 'Eliminar', cancelText: 'Cancelar', icon: 'warning' });
+                        if (!ok) return;
+                      }
                       await deleteDoc(doc(db, "paystubs", ps.id));
                     }}
                     title="Eliminar"
@@ -367,6 +371,7 @@ const currentYearYTD = useMemo(() => {
 
 /** Crear 1 paystub (con OT y % federal por talón) */
 function PaystubModal({ client, onClose }) {
+  const { markDirty, clearDirty, confirmIfDirty } = useUnsavedContext();
   const { register, handleSubmit, formState:{ errors, isSubmitting }, reset } = useForm({
     defaultValues: {
       periodStart: "", periodEnd: "",
@@ -416,7 +421,7 @@ function PaystubModal({ client, onClose }) {
           </div>
         </div>
 
-        <form className="grid gap-4 mt-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-4 mt-4" onSubmit={handleSubmit(onSubmit)} onChange={() => markDirty(true)}>
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="label label-text">Inicio (YYYY-MM-DD)</label>
@@ -462,7 +467,7 @@ function PaystubModal({ client, onClose }) {
           </div>
 
           <div className="modal-action mt-4 flex flex-col md:flex-row gap-3 justify-end">
-            <button type="button" className="btn w-full md:w-auto btn-ghost" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn w-full md:w-auto btn-ghost" onClick={async () => { const ok = await confirmIfDirty(); if (ok) onClose(); }}>Cancelar</button>
             <button className="btn btn-secondary w-full md:w-auto" disabled={isSubmitting}>Crear</button>
           </div>
         </form>
@@ -530,6 +535,7 @@ function AdjustYTDModal({ client, onClose }) {
     });
 
     reset();
+    clearDirty();
     onClose();
   };
 
@@ -552,7 +558,7 @@ function AdjustYTDModal({ client, onClose }) {
           Divide el YTD bruto entre <b>Regular</b> y <b>Overtime</b>. El sistema calcula impuestos del <b>Total</b>.
         </p>
 
-        <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)} onChange={() => markDirty(true)}>
           <div className="grid md:grid-cols-3 gap-3">
             <div>
               <label className="label label-text">Año</label>
@@ -627,7 +633,7 @@ function AdjustYTDModal({ client, onClose }) {
           </div>
 
           <div className="modal-action mt-4 flex flex-col md:flex-row gap-3 justify-end">
-            <button type="button" className="btn btn-ghost w-full md:w-auto" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-ghost w-full md:w-auto" onClick={async () => { const ok = await confirmIfDirty(); if (ok) onClose(); }}>Cancelar</button>
             <button className="btn btn-primary w-full md:w-auto" disabled={isSubmitting}>Guardar</button>
           </div>
         </form>
@@ -642,6 +648,7 @@ function AdjustYTDModal({ client, onClose }) {
 
 /** Crear 4 paystubs consecutivos (weekly/biweekly) */
 function Bulk4Modal({ client, onClose }) {
+  const { markDirty, clearDirty, confirmIfDirty } = useUnsavedContext();
   const { register, handleSubmit, formState:{ isSubmitting }, reset, watch } = useForm({
     defaultValues: {
       start: "",
@@ -681,7 +688,9 @@ function Bulk4Modal({ client, onClose }) {
     }
 
     await Promise.all(batch);
-    reset(); onClose();
+    reset();
+    clearDirty();
+    onClose();
   };
 
   return (
@@ -699,7 +708,7 @@ function Bulk4Modal({ client, onClose }) {
           </div>
         </div>
 
-        <form className="grid gap-4 mt-4" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-4 mt-4" onSubmit={handleSubmit(onSubmit)} onChange={() => markDirty(true)}>
           <div className="grid md:grid-cols-3 gap-3">
             <div>
               <label className="label label-text">Primer inicio (YYYY-MM-DD)</label>
@@ -744,7 +753,7 @@ function Bulk4Modal({ client, onClose }) {
           </div>
 
           <div className="modal-action mt-4 flex flex-col md:flex-row gap-3 justify-end">
-            <button type="button" className="btn btn-ghost w-full md:w-auto" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-ghost w-full md:w-auto" onClick={async () => { const ok = await confirmIfDirty(); if (ok) onClose(); }}>Cancelar</button>
             <button className="btn btn-accent w-full md:w-auto" disabled={isSubmitting}>Crear 4</button>
           </div>
         </form>

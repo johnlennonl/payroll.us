@@ -1,5 +1,6 @@
 // src/pages/Clients.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { useUnsavedContext } from '../providers/UnsavedChangesProvider.jsx';
 import { useForm } from "react-hook-form";
 import { db } from "../lib/firebase";
 import {
@@ -101,7 +102,8 @@ export default function Clients() {
   const onEdit = (client) => { setEditing(client); setOpen(true); };
 
   const onSoftDelete = async (client) => {
-    if (!confirm(`¿Seguro que quieres archivar a "${client.fullName}"?`)) return;
+    const ok = await confirmAction({ title: 'Archivar cliente', text: `¿Seguro que quieres archivar a "${client.fullName}"?`, confirmText: 'Archivar', cancelText: 'Cancelar', icon: 'warning' });
+    if (!ok) return;
     await updateDoc(doc(db, "clients", client.id), {
       active: false,
       updatedAt: serverTimestamp(),
@@ -330,6 +332,7 @@ export default function Clients() {
 
 /** Modal crear/editar cliente */
 function ClientModal({ onClose, initial }) {
+  const { markDirty, clearDirty, confirmIfDirty } = useUnsavedContext();
   const isEdit = !!initial;
   const {
     register,
@@ -373,7 +376,12 @@ function ClientModal({ onClose, initial }) {
       });
     }
     reset();
+    clearDirty();
     onClose();
+  };
+  const handleClose = async () => {
+    const ok = await confirmIfDirty();
+    if (ok) onClose();
   };
 
   return (
@@ -383,7 +391,7 @@ function ClientModal({ onClose, initial }) {
           {isEdit ? "Editar cliente" : "Nuevo cliente"}
         </h3>
 
-        <form className="grid gap-3" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-3" onSubmit={handleSubmit(onSubmit)} onChange={() => markDirty(true)}>
           <div className="grid md:grid-cols-2 gap-3">
             <div>
               <label className="label label-text">Nombre completo</label>
@@ -473,7 +481,7 @@ function ClientModal({ onClose, initial }) {
           </div>
 
           <div className="modal-action">
-            <button type="button" className="btn" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn" onClick={handleClose}>Cancelar</button>
             <button className="btn btn-primary" disabled={isSubmitting}>
               {isEdit ? "Guardar" : "Crear"}
             </button>
@@ -481,7 +489,7 @@ function ClientModal({ onClose, initial }) {
         </form>
       </div>
       <form method="dialog" className="modal-backdrop">
-        <button onClick={onClose}>close</button>
+        <button onClick={handleClose}>close</button>
       </form>
     </dialog>
   );

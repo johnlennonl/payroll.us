@@ -7,3 +7,24 @@
 * {
   transition: background-color .2s linear, color .2s linear, border-color .2s linear;
 }
+
+/* SweetAlert2 small theme tweaks to match Tailwind primary colors */
+.custom-swal.swal2-popup {
+  border-radius: 0.5rem;
+  background: white;
+  padding: 1.25rem;
+  box-shadow: 0 8px 30px rgba(2,6,23,0.15);
+}
+.custom-swal .swal2-title {
+  font-weight: 700;
+  color: #111827; /* gray-900 */
+}
+.custom-swal .swal2-confirm {
+  background-color: #0ea5a4 !important; /* teal-500 */
+  color: white !important;
+}
+.custom-swal .swal2-cancel {
+  background-color: #e5e7eb !important; /* gray-200 */
+  color: #111827 !important;
+}
+

@@ -14,6 +14,8 @@ const initials = (name) => {
 }
 import { computeBuyOrder, CITY_TAX_RATES } from "../lib/buyorders";
 import { fillBuyOrderPDF } from "../lib/fillBuyOrderPDF";
+import { confirmAction } from '../lib/confirmUtils';
+import { useUnsavedContext } from '../providers/UnsavedChangesProvider.jsx';
 
 export default function BuyOrders() {
   const [rows, setRows] = useState([]);
@@ -83,7 +85,8 @@ export default function BuyOrders() {
   const onEdit = (row) => { setEditing(row); setOpen(true); };
 
   const onDelete = async (row) => {
-    if (!confirm(`¿Eliminar buy order para ${row.buyerName || ''}?`)) return;
+    const ok = await confirmAction({ title: 'Eliminar buy order', text: `¿Eliminar buy order para ${row.buyerName || ''}?`, confirmText: 'Eliminar', cancelText: 'Cancelar', icon: 'warning' });
+    if (!ok) return;
     await deleteDoc(doc(db, "buyOrders", row.id));
   };
 
@@ -242,6 +245,7 @@ export default function BuyOrders() {
 }
 
 function OrderModal({ initial, onClose, ratesMap }) {
+  const { markDirty, clearDirty, confirmIfDirty } = useUnsavedContext();
   const isEdit = !!initial;
   const { register, handleSubmit, formState:{ errors, isSubmitting }, watch, reset } = useForm({
     defaultValues: {
@@ -322,7 +326,13 @@ function OrderModal({ initial, onClose, ratesMap }) {
       });
     }
     reset();
+    clearDirty();
     onClose();
+  };
+
+  const handleClose = async () => {
+    const ok = await confirmIfDirty();
+    if (ok) onClose();
   };
 
   return (
@@ -330,7 +340,7 @@ function OrderModal({ initial, onClose, ratesMap }) {
       <div className="modal-box max-w-3xl w-full p-6 rounded-2xl">
         <h3 className="font-bold text-2xl mb-3">{isEdit ? "Editar Buy Order" : "Nuevo Buy Order"}</h3>
 
-        <form className="grid gap-3" onSubmit={handleSubmit(onSubmit)}>
+        <form className="grid gap-3" onSubmit={handleSubmit(onSubmit)} onChange={() => markDirty(true)}>
           {/* Comprador */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -505,7 +515,7 @@ function OrderModal({ initial, onClose, ratesMap }) {
           </div>
 
           <div className="modal-action mt-4 flex justify-end gap-3">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            <button type="button" className="btn btn-ghost" onClick={handleClose}>Cancelar</button>
             <button className="btn btn-primary" disabled={isSubmitting}>{isEdit ? 'Guardar' : 'Crear'}</button>
           </div>
         </form>
@@ -632,7 +642,7 @@ function DetailsModal({ order, onClose }) {
         </div>
 
         <div className="modal-action mt-6 justify-end gap-2">
-          <button className="btn btn-outline" onClick={()=>printOrder(order)}>Imprimir</button>
+          <button className="btn btn-outline" onClick={()=>printOrder(order)}>Imprimir Taxes</button>
             <button 
             className="btn btn-secondary gap-2" 
             onClick={async () => {
