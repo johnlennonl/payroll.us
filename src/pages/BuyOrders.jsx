@@ -653,10 +653,7 @@ function DetailsModal({ order, onClose }) {
             className="btn btn-secondary gap-2" 
             onClick={async () => {
               try {
-                // DEBUG: mostrar el objeto order en consola para verificar datos
-                console.log('DEBUG - order antes de generar PDF:', order);
-                // Generar PDF en modo debug temporalmente para marcar nombres de campo
-                await fillBuyOrderPDF(order, { debug: true });
+                await fillBuyOrderPDF(order);
               } catch (err) {
                 console.error('Error al generar PDF:', err);
               }
