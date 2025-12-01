@@ -190,14 +190,16 @@ export async function fillBuyOrderPDF(order, { debug = false } = {}) {
       let subtotalFilled = false; // marca si ya colocamos el TOTAL que corresponde al Selling Price
       for (const field of fields) {
         try {
-          const fieldName = field.getName();
-          const fieldType = field.constructor.name;
-
-          // Aceptar solo campos de texto
-          if (!fieldType.startsWith('PDFTextField')) {
-            console.log(`⏭️ Saltando campo "${fieldName}" (${fieldType})`);
+          // Algunos bundlers/minificadores pueden alterar los nombres de constructor
+          // Por eso detectamos si el campo es 'texto' comprobando la presencia de setText
+          const rawName = (typeof field.getName === 'function') ? field.getName() : '(sin nombre)';
+          const isTextLike = typeof field.setText === 'function';
+          if (!isTextLike) {
+            const approxType = field && field.constructor && field.constructor.name ? field.constructor.name : 'unknown';
+            console.log(`⏭️ Saltando campo "${rawName}" (no es tipo texto, approx: ${approxType})`);
             continue;
           }
+          const fieldName = rawName;
 
           // Resolver valor a partir del mapeo base
           let value = fieldMappings[fieldName];

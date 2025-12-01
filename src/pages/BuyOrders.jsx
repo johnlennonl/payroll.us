@@ -316,18 +316,24 @@ function OrderModal({ initial, onClose, ratesMap }) {
       status: v.status,
       updatedAt: serverTimestamp(),
     };
-
-    if (isEdit) {
-      await updateDoc(doc(db, "buyOrders", initial.id), payload);
-    } else {
-      await addDoc(collection(db, "buyOrders"), {
-        ...payload,
-        createdAt: serverTimestamp(),
-      });
+    try {
+      if (isEdit) {
+        await updateDoc(doc(db, "buyOrders", initial.id), payload);
+      } else {
+        await addDoc(collection(db, "buyOrders"), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+      }
+      reset();
+      clearDirty();
+      onClose();
+    } catch (err) {
+      console.error('Error guardando buy order:', err);
+      // Mostrar mensaje útil al usuario
+      alert('Error guardando Buy Order. Revisa la consola para más detalles.');
+      throw err;
     }
-    reset();
-    clearDirty();
-    onClose();
   };
 
   const handleClose = async () => {
